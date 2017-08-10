@@ -19,17 +19,16 @@ import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.jboss.netty.channel.ChannelHandler.Sharable;
-import org.jboss.netty.channel.ChannelHandlerContext;
-import org.jboss.netty.channel.ChannelStateEvent;
-import org.jboss.netty.channel.ExceptionEvent;
-import org.jboss.netty.channel.MessageEvent;
-import org.jboss.netty.channel.SimpleChannelHandler;
-
 import com.alibaba.dubbo.common.URL;
 import com.alibaba.dubbo.common.utils.NetUtils;
 import com.alibaba.dubbo.remoting.Channel;
 import com.alibaba.dubbo.remoting.ChannelHandler;
+
+import io.netty.channel.ChannelDuplexHandler;
+import io.netty.channel.ChannelHandler.Sharable;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.ChannelPromise;
 
 /**
  * NettyHandler
@@ -37,7 +36,7 @@ import com.alibaba.dubbo.remoting.ChannelHandler;
  * @author william.liangf
  */
 @Sharable
-public class NettyHandler extends SimpleChannelHandler {
+public class NettyHandler extends ChannelDuplexHandler {
 
     private final Map<String, Channel> channels = new ConcurrentHashMap<String, Channel>(); // <ip:port, channel>
     
@@ -61,58 +60,64 @@ public class NettyHandler extends SimpleChannelHandler {
     }
 
     @Override
-    public void channelConnected(ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
-        NettyChannel channel = NettyChannel.getOrAddChannel(ctx.getChannel(), url, handler);
-        try {
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+            NettyChannel channel = NettyChannel.getOrAddChannel(ctx.channel(), url, handler);
+            try {
             if (channel != null) {
-                channels.put(NetUtils.toAddressString((InetSocketAddress) ctx.getChannel().getRemoteAddress()), channel);
+                channels.put(NetUtils.toAddressString((InetSocketAddress) ctx.channel().remoteAddress()), channel);
             }
             handler.connected(channel);
         } finally {
-            NettyChannel.removeChannelIfDisconnected(ctx.getChannel());
+                NettyChannel.removeChannelIfDisconnected(ctx.channel());
         }
     }
 
+    /**
+      * Calls {@link ChannelHandlerContext#fireChannelInactive()} to forward
+      * to the next {@link ChannelHandler} in the {@link ChannelPipeline}.
+      *
+      * Sub-classes may override this method to change behavior.
+      */
     @Override
-    public void channelDisconnected(ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
-        NettyChannel channel = NettyChannel.getOrAddChannel(ctx.getChannel(), url, handler);
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        NettyChannel channel = NettyChannel.getOrAddChannel(ctx.channel(), url, handler);
         try {
-            channels.remove(NetUtils.toAddressString((InetSocketAddress) ctx.getChannel().getRemoteAddress()));
+            channels.remove(NetUtils.toAddressString((InetSocketAddress) ctx.channel().remoteAddress()));
             handler.disconnected(channel);
         } finally {
-            NettyChannel.removeChannelIfDisconnected(ctx.getChannel());
-        }
-    }
-    
-    @Override
-    public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
-        NettyChannel channel = NettyChannel.getOrAddChannel(ctx.getChannel(), url, handler);
-        try {
-            handler.received(channel, e.getMessage());
-        } finally {
-            NettyChannel.removeChannelIfDisconnected(ctx.getChannel());
+            NettyChannel.removeChannelIfDisconnected(ctx.channel());
         }
     }
 
     @Override
-    public void writeRequested(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
-        super.writeRequested(ctx, e);
-        NettyChannel channel = NettyChannel.getOrAddChannel(ctx.getChannel(), url, handler);
+	public void channelRead(ChannelHandlerContext ctx, Object msg)
+            throws Exception {
+        NettyChannel channel = NettyChannel.getOrAddChannel(ctx.channel(), url, handler);
         try {
-            handler.sent(channel, e.getMessage());
+            handler.received(channel, msg);
         } finally {
-            NettyChannel.removeChannelIfDisconnected(ctx.getChannel());
+            NettyChannel.removeChannelIfDisconnected(ctx.channel());
         }
     }
 
     @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e) throws Exception {
-        NettyChannel channel = NettyChannel.getOrAddChannel(ctx.getChannel(), url, handler);
+    public void write(ChannelHandlerContext ctx, final Object msg, ChannelPromise promise) throws Exception {
+        ctx.writeAndFlush(msg, promise);
+        NettyChannel channel = NettyChannel.getOrAddChannel(ctx.channel(), url, handler);
+        try {
+            handler.sent(channel, msg);
+        } finally {
+            NettyChannel.removeChannelIfDisconnected(ctx.channel());
+        }
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable e) throws Exception {
+        NettyChannel channel = NettyChannel.getOrAddChannel(ctx.channel(), url, handler);
         try {
             handler.caught(channel, e.getCause());
         } finally {
-            NettyChannel.removeChannelIfDisconnected(ctx.getChannel());
+            NettyChannel.removeChannelIfDisconnected(ctx.channel());
         }
     }
-
 }

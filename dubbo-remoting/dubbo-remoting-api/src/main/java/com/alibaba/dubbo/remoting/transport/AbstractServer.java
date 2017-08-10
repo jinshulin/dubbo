@@ -22,15 +22,16 @@ import java.util.concurrent.ThreadPoolExecutor;
 
 import com.alibaba.dubbo.common.Constants;
 import com.alibaba.dubbo.common.URL;
+import com.alibaba.dubbo.common.extension.ExtensionLoader;
 import com.alibaba.dubbo.common.logger.Logger;
 import com.alibaba.dubbo.common.logger.LoggerFactory;
+import com.alibaba.dubbo.common.store.DataStore;
 import com.alibaba.dubbo.common.utils.ExecutorUtil;
 import com.alibaba.dubbo.common.utils.NetUtils;
 import com.alibaba.dubbo.remoting.Channel;
 import com.alibaba.dubbo.remoting.ChannelHandler;
 import com.alibaba.dubbo.remoting.RemotingException;
 import com.alibaba.dubbo.remoting.Server;
-import com.alibaba.dubbo.remoting.transport.dispatcher.WrappedChannelHandler;
 
 /**
  * AbstractServer
@@ -60,7 +61,13 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
         String host = url.getParameter(Constants.ANYHOST_KEY, false) 
                         || NetUtils.isInvalidLocalHost(getUrl().getHost()) 
                         ? NetUtils.ANYHOST : getUrl().getHost();
-        bindAddress = new InetSocketAddress(host, getUrl().getPort());
+        if (url.getParameter("docker") != null
+                && url.getParameter("docker").equals("true")) {
+            bindAddress = new InetSocketAddress(NetUtils.ANYHOST, getUrl()
+                        .getPort());
+        } else {
+            bindAddress = new InetSocketAddress(host, getUrl().getPort());
+        }
         this.accepts = url.getParameter(Constants.ACCEPTS_KEY, Constants.DEFAULT_ACCEPTS);
         this.idleTimeout = url.getParameter(Constants.IDLE_TIMEOUT_KEY, Constants.DEFAULT_IDLE_TIMEOUT);
         try {
@@ -72,9 +79,9 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
             throw new RemotingException(url.toInetSocketAddress(), null, "Failed to bind " + getClass().getSimpleName() 
                                         + " on " + getLocalAddress() + ", cause: " + t.getMessage(), t);
         }
-        if (handler instanceof WrappedChannelHandler ){
-            executor = ((WrappedChannelHandler)handler).getExecutor();
-        }
+
+        executor = (ExecutorService) ExtensionLoader.getExtensionLoader(DataStore.class)
+                .getDefaultExtension().get(Constants.EXECUTOR_SERVICE_COMPONENT_KEY, Integer.toString(url.getPort()));
     }
     
     protected abstract void doOpen() throws Throwable;
