@@ -601,7 +601,7 @@ public class JavaDeserializer extends AbstractMapDeserializer {
 
       try {
         java.util.Date date = (java.util.Date) in.readObject();
-        if (date != null) value = new java.sql.Date(date.getTime());
+        value = new java.sql.Date(date.getTime());
 
         _field.set(obj, value);
       } catch (Exception e) {

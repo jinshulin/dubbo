@@ -45,6 +45,7 @@ import com.alibaba.dubbo.rpc.Invoker;
 import com.alibaba.dubbo.rpc.Protocol;
 import com.alibaba.dubbo.rpc.ProxyFactory;
 import com.alibaba.dubbo.rpc.cluster.ConfiguratorFactory;
+import com.alibaba.dubbo.rpc.ServiceClassHolder;
 import com.alibaba.dubbo.rpc.service.GenericService;
 import com.alibaba.dubbo.rpc.support.ProtocolUtils;
 
@@ -207,7 +208,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             generic = Boolean.FALSE.toString();
         }
         if(local !=null){
-            if("true".equals(local)){
+            if(local=="true"){
                 local=interfaceName+"Local";
             }
             Class<?> localClass;
@@ -221,7 +222,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             }
         }
         if(stub !=null){
-            if("true".equals(stub)){
+            if(stub=="true"){
                 stub=interfaceName+"Stub";
             }
             Class<?> stubClass;
@@ -350,6 +351,11 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
         if (anyhost) {
             map.put(Constants.ANYHOST_KEY, "true");
         }
+        if (protocolConfig.getDocker() != null && protocolConfig.getDocker().equals("true")) {
+            map.put("docker", "true");
+        } else {
+            map.put("docker", "false");
+        }
         map.put(Constants.SIDE_KEY, Constants.PROVIDER_SIDE);
         map.put(Constants.DUBBO_VERSION_KEY, Version.getVersion());
         map.put(Constants.TIMESTAMP_KEY, String.valueOf(System.currentTimeMillis()));
@@ -467,7 +473,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             if (!Constants.SCOPE_REMOTE.toString().equalsIgnoreCase(scope)) {
                 exportLocal(url);
             }
-            //如果配置不是local则暴露为远程服务.(配置为local，则表示只暴露本地服务)
+            //如果配置不是local则暴露为远程服务.(配置为local，则表示只暴露远程服务)
             if (! Constants.SCOPE_LOCAL.toString().equalsIgnoreCase(scope) ){
                 if (logger.isInfoEnabled()) {
                     logger.info("Export dubbo service " + interfaceClass.getName() + " to url " + url);
@@ -507,11 +513,19 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                     .setProtocol(Constants.LOCAL_PROTOCOL)
                     .setHost(NetUtils.LOCALHOST)
                     .setPort(0);
+
+            // modified by lishen
+            ServiceClassHolder.getInstance().pushServiceClass(getServiceClass(ref));
+
             Exporter<?> exporter = protocol.export(
                     proxyFactory.getInvoker(ref, (Class) interfaceClass, local));
             exporters.add(exporter);
             logger.info("Export dubbo service " + interfaceClass.getName() +" to local registry");
         }
+    }
+
+    protected Class getServiceClass(T ref) {
+        return ref.getClass();
     }
 
     private void checkDefault() {
