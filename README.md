@@ -200,3 +200,19 @@ http://stackoverflow.com/questions/17196766/can-resteasy-choose-method-based-on-
 ### JAX-RS中作POST的方法能够接收多个参数吗？
 
 http://stackoverflow.com/questions/5553218/jax-rs-post-multiple-objects
+
+### 发布到maven私服
+配置settings.xml在servers配置中增加
+```sh
+<server>
+    <id>thirdparty</id>
+    <username>admin</username>
+    <password>admin123</password>
+</server>
+```
+在maven私服的configuration的Deployment Policy设置为Allow Redeploy，否则会报错，提示权限错误
+
+在dubbo目录下执行
+```sh
+mvn deploy -Dmaven.test.skip=true
+```

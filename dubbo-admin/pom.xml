@@ -29,7 +29,7 @@
 		<wtpversion>1.5</wtpversion>
 		<wtpContextName>/</wtpContextName>
 		<eclipse.useProjectReferences>false</eclipse.useProjectReferences>
-		<skip_maven_deploy>false</skip_maven_deploy>
+		<skip_maven_deploy>true</skip_maven_deploy>
 	</properties>
 	<dependencies>
 		<dependency>
